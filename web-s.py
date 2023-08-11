@@ -1,21 +1,50 @@
 from bs4 import BeautifulSoup
-import csv
 import requests
+import csv
 
-page_to_scrape = requests.get("https://myanimelist.net/anime/season")
+def contains_keyword(keywords, review):
+    for keyword in keywords:
+        if not keyword.lower() in get_review_text(review).lower():
+            return False
+    return True
+
+def get_review_text(review):
+    return review.find("div", attrs={"class":"text"}).text
+
+page_to_scrape = requests.get("https://myanimelist.net/reviews.php")
 soup = BeautifulSoup(page_to_scrape.text, "html.parser")
 
-titles = soup.findAll("a", href = True, attrs={"class":"link-title"})
-ratings = soup.findAll("div", attrs={"title":"Score"})
+review_list = soup.findAll("div", attrs={"class":"review-element"})
+titles = list()
+reviews = list()
+ratings = list()
+links = list()
 
-file = open("scraped_animes.csv", "w")
+keywords = input("What keyword do you want to search for? (For multiple terms, separate with a comma and space) ").split(", ")
+    
+for review in review_list:
+    if not contains_keyword(keywords,review):
+        continue
+    
+    raw_review = get_review_text(review)
+    reviews.append(raw_review.strip().replace("...", "").replace("\n", "").replace("\r", "").replace("\t", ""))
+    
+    title = review.find("a", attrs={"class":"title"})
+    titles.append(title.text)
+    
+    link = title['href']
+    links.append(link)
+    
+    page_to_scrape = requests.get(link)
+    soup = BeautifulSoup(page_to_scrape.text, "html.parser")
+    rating = soup.find("div", attrs={"class":"score-label"}).text
+    ratings.append(rating)
+    
+file = open("suggested_media.csv", "w")
 writer = csv.writer(file)
 
-writer.writerow(["Titles", "Ratings"])
+writer.writerow(["Titles", "Reviews", "Ratings", "Links"])
                  
-for title, rating in zip(titles, ratings):
-    if "N/A" in rating.text:
-        continue
-    if float(rating.text) >= 8:
-        writer.writerow([title.text, rating.text])
+for title, review, rating, link in zip(titles, reviews, ratings, links):
+    writer.writerow([title, review, rating, link])
 file.close()
